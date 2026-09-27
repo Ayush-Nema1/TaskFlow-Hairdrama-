@@ -23,6 +23,5 @@ create index if not exists tasks_created_by_idx on public.tasks(created_by);
 create index if not exists tasks_assigned_to_idx on public.tasks(assigned_to);
 
 -- This app uses the Flask backend for database access.
--- The service role key stays on the backend and is never exposed to the browser.
 alter table public.users enable row level security;
 alter table public.tasks enable row level security;
