@@ -236,3 +236,13 @@ button {
     flex-direction: column;
   }
 }
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.google-btn svg {
+  flex-shrink: 0;
+}
