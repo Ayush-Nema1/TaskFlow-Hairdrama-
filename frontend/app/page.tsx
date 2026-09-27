@@ -21,6 +21,9 @@ export default function HomePage() {
   }, [router]);
 
   async function loginWithGoogle() {
+      console.log("CURRENT URL:", window.location.href);
+  console.log("ORIGIN:", window.location.origin);
+
     setMessage("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

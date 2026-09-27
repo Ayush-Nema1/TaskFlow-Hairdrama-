@@ -4,14 +4,17 @@ A simple task management application built for the Hairdrama Tech internship ass
 
 ## Technology
 
-* **Frontend:** Next.js + TypeScript + plain CSS
+* **Frontend:** Next.js + TypeScript + CSS
 * **Backend:** Flask + Python
 * **Database:** Supabase PostgreSQL
 * **Authentication:** Google OAuth 2.0 through Supabase Auth
-* **Email:** Gmail SMTP with Gmail App Password
-* **Deployment:** Vercel (frontend) + Render (backend)
+* **Email:** Gmail API with OAuth 2.0 (`gmail.send` scope)
+* **Frontend Deployment:** Vercel
+* **Backend Deployment:** Render
 
-## Architecture
+---
+
+# Architecture
 
 ```text
                          Google
@@ -20,27 +23,29 @@ A simple task management application built for the Hairdrama Tech internship ass
                            |
                            v
 Browser -> Next.js Frontend -> Flask REST API -> Supabase PostgreSQL
-              |                    |
-              |                    v
-              |               Gmail SMTP
-              |                    |
-              |                    v
-              |              Email notifications
+              |                     |
+              |                     v
+              |                 Gmail API
+              |                     |
+              |                     v
+              |              Email Notifications
               |
               v
-        Supabase Auth
+         Supabase Auth
 ```
 
-### Why this design?
+## Why this design?
 
 * **Next.js** handles the user interface and Google sign-in flow.
 * **Flask** handles API requests, authentication verification, authorization, business logic, and database access.
 * **Supabase Auth** handles Google authentication and user sessions.
 * **Supabase PostgreSQL** stores application users and tasks.
-* **Gmail SMTP** sends task notification emails.
-* The **Supabase secret key and Gmail credentials stay only on the backend**.
+* **Gmail API** sends task notification emails.
+* Sensitive backend credentials are kept only on the backend.
 
-## Main Features
+---
+
+# Main Features
 
 1. Sign in with Google.
 2. Automatically create or update the application user after login.
@@ -66,9 +71,9 @@ migrations/001_initial_schema.sql
 
 in the Supabase SQL Editor.
 
-The database contains two main tables:
+The database contains two main tables.
 
-### `users`
+## `users`
 
 Stores application user information:
 
@@ -80,7 +85,7 @@ Stores application user information:
 
 The user ID references the authenticated user from Supabase Auth.
 
-### `tasks`
+## `tasks`
 
 Stores:
 
@@ -93,16 +98,16 @@ Stores:
 * `created_at`
 * `completed_at`
 
-The task status is restricted to:
+Task status is restricted to:
 
 ```text
 pending
 completed
 ```
 
-Indexes are also created for `created_by` and `assigned_to`.
+Indexes are created for `created_by` and `assigned_to`.
 
-Row Level Security is enabled on the application tables. Database access in this application is performed through the Flask backend using the server-side Supabase secret key.
+Row Level Security is enabled on the application tables. Database access is performed through the Flask backend using the server-side Supabase secret key.
 
 ---
 
@@ -112,35 +117,38 @@ Enable Google authentication from:
 
 ```text
 Supabase Dashboard
-→ Authentication
-→ Providers
-→ Google
+    ↓
+Authentication
+    ↓
+Providers
+    ↓
+Google
 ```
 
-Configure the Google Client ID and Client Secret.
+Configure the Google Client ID and Client Secret in Supabase.
 
-The Google OAuth flow is:
+The Google login flow is:
 
 ```text
 User clicks Continue with Google
-              |
-              v
-       Supabase OAuth
-              |
-              v
-            Google
-              |
-              v
-      Google authenticates user
-              |
-              v
-      Supabase creates session
-              |
-              v
+            |
+            v
+      Supabase OAuth
+            |
+            v
+          Google
+            |
+            v
+    Google authenticates user
+            |
+            v
+    Supabase creates session
+            |
+            v
        /auth/callback
-              |
-              v
-          Dashboard
+            |
+            v
+         Dashboard
 ```
 
 The frontend starts the OAuth flow using:
@@ -154,7 +162,7 @@ supabase.auth.signInWithOAuth({
 });
 ```
 
-The callback page checks whether a valid session exists and redirects the user to the dashboard.
+The callback page checks the current Supabase session and redirects the authenticated user to the dashboard.
 
 ---
 
@@ -168,7 +176,7 @@ The access token is sent to the Flask backend using:
 Authorization: Bearer <access-token>
 ```
 
-The Flask backend reads this token and asks Supabase Auth to verify it.
+The Flask backend verifies the token with Supabase Auth.
 
 ```text
 Next.js
@@ -187,57 +195,73 @@ Authenticated User
 
 Protected backend endpoints use this authentication mechanism.
 
-The application also synchronizes the authenticated user with the application's own `users` table through:
+The application synchronizes the authenticated user with the application's own `users` table through:
 
 ```text
 POST /api/users/sync
 ```
 
-The backend uses an **upsert**, meaning:
+The backend uses an upsert:
 
-* If the user doesn't exist → create the user.
+* If the user does not exist → create the user.
 * If the user already exists → update the user.
 
 ---
 
-# 4. Gmail Setup
+# 4. Gmail API Setup
 
-A Gmail account with 2-Step Verification is used for sending application emails.
+The application uses a dedicated Gmail account for sending task notification emails.
 
-Create a Gmail App Password and store it in the backend environment variables.
-
-Do not commit the real password to GitHub.
-
-The application uses:
+The application uses the Gmail API with the OAuth 2.0:
 
 ```text
-smtp.gmail.com
-Port: 465
-SSL
+https://www.googleapis.com/auth/gmail.send
 ```
 
-The email flow is:
+scope.
+
+The Gmail authorization flow is:
 
 ```text
 Flask Backend
       |
       v
-Create EmailMessage
+/auth/gmail
       |
       v
-Connect to Gmail SMTP
+Google OAuth 2.0
       |
       v
-SSL connection
+Gmail account grants gmail.send permission
       |
       v
-Authenticate with Gmail App Password
+/oauth2callback
       |
       v
-Send Email
+Authorized OAuth Token
+      |
+      v
+Gmail API
+      |
+      v
+Email Notification
 ```
 
-The backend uses the Gmail address and App Password only on the server.
+For local development, the authorized OAuth token is stored in:
+
+```text
+backend/token.json
+```
+
+For production, the authorized token is stored securely in Render as:
+
+```text
+GMAIL_TOKEN_JSON
+```
+
+The Gmail API uses the authorized token to send emails through Google's HTTPS API.
+
+No Gmail SMTP connection or Gmail App Password is required by the current implementation.
 
 ---
 
@@ -255,13 +279,13 @@ Create a virtual environment:
 python -m venv .venv
 ```
 
-### Windows
+## Windows
 
 ```bash
 .venv\Scripts\activate
 ```
 
-### macOS/Linux
+## macOS/Linux
 
 ```bash
 source .venv/bin/activate
@@ -273,21 +297,15 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Copy:
-
-```text
-.env.example
-```
-
-to:
+Create the backend environment file:
 
 ```text
 .env
 ```
 
-and configure the required backend environment variables.
+Configure the required backend environment variables.
 
-Run the Flask application:
+Run Flask:
 
 ```bash
 python app.py
@@ -299,13 +317,13 @@ The local backend runs on:
 http://localhost:5000
 ```
 
-The health endpoint is:
+Health endpoint:
 
 ```text
-/api/health
+GET /api/health
 ```
 
-For production, Render runs the application using:
+For production, Render runs:
 
 ```bash
 gunicorn app:app
@@ -315,22 +333,52 @@ gunicorn app:app
 
 # 6. Backend Environment Variables
 
-The backend uses the following environment variables:
+The backend uses:
 
 ```text
 SUPABASE_URL=
 SUPABASE_SECRET_KEY=
 FRONTEND_URL=
 PORT=
+ENVIRONMENT=
 GMAIL_ADDRESS=
-GMAIL_APP_PASSWORD=
+GMAIL_TOKEN_JSON=
 ```
 
-### Important
+## Local example
 
-`SUPABASE_SECRET_KEY` and `GMAIL_APP_PASSWORD` are server-side secrets.
+```text
+SUPABASE_URL=your-supabase-url
+SUPABASE_SECRET_KEY=your-server-side-supabase-key
+FRONTEND_URL=http://localhost:3000
+PORT=5000
+ENVIRONMENT=local
+GMAIL_ADDRESS=your-sender@gmail.com
+```
 
-They must never be exposed in the frontend or committed to GitHub.
+For local development, Gmail authentication creates:
+
+```text
+token.json
+```
+
+automatically.
+
+## Render example
+
+```text
+SUPABASE_URL=your-supabase-url
+SUPABASE_SECRET_KEY=your-server-side-supabase-key
+FRONTEND_URL=https://task-flow-hairdrama.vercel.app
+PORT=5000
+ENVIRONMENT=production
+GMAIL_ADDRESS=your-sender@gmail.com
+GMAIL_TOKEN_JSON=your-authorized-token-json
+```
+
+`GMAIL_TOKEN_JSON` contains the authorized Gmail OAuth token.
+
+Never commit the actual values to GitHub.
 
 ---
 
@@ -360,13 +408,7 @@ The frontend runs on:
 http://localhost:3000
 ```
 
-Copy:
-
-```text
-.env.example
-```
-
-to:
+Create:
 
 ```text
 .env.local
@@ -386,11 +428,27 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_API_URL=
 ```
 
-The Supabase URL and browser-safe public/anon key are used to create the Supabase browser client.
+Example local configuration:
 
-The backend API URL tells the frontend where the Flask API is running.
+```text
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
 
-The frontend does **not** contain the Supabase secret key or Gmail App Password.
+Production:
+
+```text
+NEXT_PUBLIC_API_URL=https://taskflow-hairdrama.onrender.com
+```
+
+The frontend only contains public/browser-safe values.
+
+The frontend must never contain:
+
+* Supabase secret/service-role credentials
+* Gmail OAuth tokens
+* Gmail credentials
 
 ---
 
@@ -465,7 +523,10 @@ Validate title and assignee
 Create task in PostgreSQL
           |
           v
-Send email to assignee
+Find assigned user's email
+          |
+          v
+Gmail API sends notification
           |
           v
 Return 201 Created
@@ -494,13 +555,13 @@ Find task
           v
 Check current user == assigned_to
           |
-      ┌───┴───┐
+      +---+---+
       |       |
      YES      NO
       |       |
       v       v
-Update     403 Forbidden
-task
+   Update   403 Forbidden
+    task
       |
       v
 Set completed_at
@@ -509,18 +570,18 @@ Set completed_at
 Find task creator
       |
       v
-Send completion email
+Gmail API sends completion email
 ```
 
 The backend performs the authorization check even though the frontend only displays the completion button to the assigned user.
 
-This is because frontend restrictions are not a security boundary.
+Frontend restrictions are not treated as a security boundary.
 
 ---
 
 # 12. Email Flow
 
-### When a task is created
+## When a task is created
 
 ```text
 Task saved
@@ -529,13 +590,16 @@ Task saved
 Find assignee
     |
     v
-Gmail SMTP
+Get assignee email
+    |
+    v
+Gmail API
     |
     v
 Email sent to assignee
 ```
 
-### When a task is completed
+## When a task is completed
 
 ```text
 Task updated
@@ -544,13 +608,18 @@ Task updated
 Find task creator
     |
     v
-Gmail SMTP
+Get creator email
+    |
+    v
+Gmail API
     |
     v
 Email sent to creator
 ```
 
-Email delivery is handled after the database operation. If email delivery fails, the task operation itself is not rolled back.
+Email delivery happens after the database operation.
+
+If email delivery fails, the task operation itself is not rolled back.
 
 ---
 
@@ -580,7 +649,8 @@ TaskFlow/
 ├── backend/
 │   ├── routes/
 │   │   ├── auth.py
-│   │   └── tasks.py
+│   │   ├── tasks.py
+│   │   └── gmail_auth.py
 │   │
 │   ├── services/
 │   │   ├── auth_service.py
@@ -588,6 +658,8 @@ TaskFlow/
 │   │
 │   ├── app.py
 │   ├── config.py
+│   ├── credentials.json       # Local only - never commit
+│   ├── token.json             # Local only - never commit
 │   ├── requirements.txt
 │   └── .env.example
 │
@@ -601,13 +673,13 @@ TaskFlow/
 
 # 14. Important Backend Design Decisions
 
-### Authentication
+## Authentication
 
 The backend does not trust the frontend to identify the current user.
 
 It verifies the Supabase access token before performing protected operations.
 
-### Authorization
+## Authorization
 
 For completing a task, the backend checks:
 
@@ -615,13 +687,15 @@ For completing a task, the backend checks:
 task.assigned_to == authenticated_user.id
 ```
 
-If not, it returns:
+If the condition is false:
 
 ```text
 403 Forbidden
 ```
 
-### Error Handling
+is returned.
+
+## Error Handling
 
 The API uses appropriate HTTP status codes:
 
@@ -634,18 +708,18 @@ The API uses appropriate HTTP status codes:
 404 → Resource not found
 ```
 
-### Database Access
+## Database Access
 
 The Supabase client is created once and reused by the backend.
 
-### Task Listing
+## Task Listing
 
 The task API retrieves:
 
 * Tasks created by the current user
 * Tasks assigned to the current user
 
-It then merges them by task ID to avoid duplicates and adds creator/assignee information to the response.
+The results are merged by task ID to avoid duplicates and include creator and assignee information.
 
 ---
 
@@ -655,7 +729,7 @@ It then merges them by task ID to avoid duplicates and adds creator/assignee inf
 
 The Flask backend is deployed on **Render**.
 
-The backend root directory is:
+Backend root directory:
 
 ```text
 backend
@@ -667,9 +741,9 @@ Production start command:
 gunicorn app:app
 ```
 
-The required backend environment variables are configured in the Render dashboard.
+Required environment variables are configured in the Render dashboard.
 
-The production frontend URL is configured in:
+The production frontend URL is configured using:
 
 ```text
 FRONTEND_URL
@@ -677,11 +751,23 @@ FRONTEND_URL
 
 This is also used for Flask CORS configuration.
 
+Backend URL:
+
+```text
+https://taskflow-hairdrama.onrender.com
+```
+
 ## Frontend
 
 The Next.js frontend is deployed on **Vercel**.
 
-The production environment variables are configured in the Vercel project settings:
+Production frontend:
+
+```text
+https://task-flow-hairdrama.vercel.app
+```
+
+Vercel environment variables:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL
@@ -689,7 +775,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY
 NEXT_PUBLIC_API_URL
 ```
 
-The production frontend communicates with the deployed Flask backend through `NEXT_PUBLIC_API_URL`.
+The production frontend communicates with the deployed Flask backend through:
+
+```text
+NEXT_PUBLIC_API_URL
+```
 
 ---
 
@@ -710,7 +800,7 @@ A successful response is:
 }
 ```
 
-This endpoint is useful for confirming that the deployed backend is running.
+This endpoint can be used to confirm that the deployed backend is running.
 
 ---
 
@@ -723,22 +813,38 @@ This endpoint is useful for confirming that the deployed backend is running.
 * `created_by` is determined from the authenticated backend user.
 * Task completion is authorized on the backend.
 * Supabase secret credentials stay on the backend.
-* Gmail App Password stays on the backend.
-* Real `.env` files should never be committed to GitHub.
+* Gmail OAuth credentials stay on the backend.
+* `credentials.json` must never be committed to GitHub.
+* `token.json` must never be committed to GitHub.
+* Real `.env` files must never be committed to GitHub.
 * `.env.example` contains only variable names/placeholders.
+
+Recommended `.gitignore`:
+
+```gitignore
+.env
+.env.local
+credentials.json
+token.json
+test_email.py
+node_modules/
+.next/
+__pycache__/
+.venv/
+```
 
 ---
 
 # 18. Deployment Status
 
-The application is currently deployed with:
+The application is deployed with:
 
 ```text
-Frontend → Vercel
-Backend  → Render
-Database → Supabase PostgreSQL
-Auth     → Supabase Google OAuth
-Email    → Gmail SMTP
+Frontend  → Vercel
+Backend   → Render
+Database  → Supabase PostgreSQL
+Auth      → Supabase Google OAuth
+Email     → Gmail API
 ```
 
 The production application supports:
@@ -756,25 +862,19 @@ The production application supports:
 
 # 19. Git Commit History
 
-The project uses small feature-based commits where appropriate.
+The project uses feature-based commits.
 
 Examples:
 
 ```text
 chore: initialize project
-
 feat: add supabase task schema
-
 feat: add flask task api
-
 feat: add google authentication
-
 feat: add task dashboard
-
 feat: add gmail notifications
-
 feat: add google login icon
-
+feat: add gmail api integration
 chore: add production config
 ```
 
@@ -786,26 +886,34 @@ The complete architecture can be summarized as:
 
 ```text
 Next.js
-   ↓
+   |
+   v
 User Interface
-   ↓
+   |
+   v
 Supabase Auth
-   ↓
+   |
+   v
 Access Token
-   ↓
+   |
+   v
 Flask REST API
-   ↓
-Authentication + Authorization
-   ↓
+   |
+   +---- Authentication + Authorization
+   |
+   v
 Supabase PostgreSQL
-   ↓
+   |
+   v
 Task Data
-   ↓
-Gmail SMTP
-   ↓
+   |
+   v
+Gmail API
+   |
+   v
 Email Notifications
 ```
 
 The main design principle is:
 
-> **The frontend handles the user experience, while the backend is responsible for authentication verification, authorization, business logic, and secure database operations.**
+> **The frontend handles the user experience, while the backend is responsible for authentication verification, authorization, business logic, database operations, and secure email integration.**
