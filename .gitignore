@@ -19,3 +19,6 @@ frontend/out/
 .DS_Store
 .vscode/
 .idea/
+credentials.json
+token.json
+test_email.py
